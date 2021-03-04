@@ -164,17 +164,15 @@ class SageMakerTrainer(Trainer):
         logger.info("Saving model checkpoint to %s", output_dir)
         # Save a trained model and configuration using `save_pretrained()`.
         # They can then be reloaded using `from_pretrained()`
-        if not isinstance(self.model, PreTrainedModel):
-            if isinstance(_model_unwrap(self.model), PreTrainedModel):
-                _model_unwrap(self.model).config.save_pretrained(output_dir)
-            else:
-                logger.info("Trainer.model is not a `PreTrainedModel`, only saving its state dict.")
-            # Consolidate state_dict on all dp_rank 0 processes
-            state_dict = self.model.state_dict()
-            if self.is_world_process_zero():
-                torch.save(state_dict, os.path.join(output_dir, WEIGHTS_NAME))
+        assert isinstance(self.model_wrapped, smp.model.DistributedModel), "self.model_wrapped should be an instance of DistributedModel"
+        if isinstance(_model_unwrap(self.model_wrapped), PreTrainedModel):
+            _model_unwrap(self.model_wrapped).config.save_pretrained(output_dir)
         else:
-            self.model.save_pretrained(output_dir)
+            logger.info("Trainer.model is not a `PreTrainedModel`, only saving its state dict.")
+        # Consolidate state_dict on all dp_rank 0 processes
+        state_dict = self.model_wrapped.state_dict()
+        if self.is_world_process_zero():
+            torch.save(state_dict, os.path.join(output_dir, WEIGHTS_NAME))
         if self.tokenizer is not None and self.is_world_process_zero():
             self.tokenizer.save_pretrained(output_dir)
 
